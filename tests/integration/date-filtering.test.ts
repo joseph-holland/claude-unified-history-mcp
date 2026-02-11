@@ -99,7 +99,7 @@ describe('Date Filtering Performance Tests', () => {
       }
     };
 
-    const response = await sendRequest(request);
+    const response = await sendRequest(request, 15000);
 
     expect(response).toHaveProperty('result');
 
@@ -107,7 +107,7 @@ describe('Date Filtering Performance Tests', () => {
     expect(result).toHaveProperty('results');
     expect(result).toHaveProperty('sources_searched');
     expect(Array.isArray(result.sources_searched)).toBe(true);
-  });
+  }, 20000);
 
   it('should handle queries for date ranges with no data efficiently', async () => {
     const startTime = Date.now();

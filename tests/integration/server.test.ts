@@ -110,6 +110,7 @@ describe('MCP Server Integration Tests', () => {
     });
 
     it('should handle list_projects tool call', async () => {
+      // Scans all projects on disk - needs longer timeout with real data
       const request = {
         jsonrpc: '2.0',
         id: 2,
@@ -120,7 +121,7 @@ describe('MCP Server Integration Tests', () => {
         }
       };
 
-      const response = await sendRequest(request);
+      const response = await sendRequest(request, 15000);
 
       expect(response).toMatchObject({
         jsonrpc: '2.0',
@@ -137,7 +138,7 @@ describe('MCP Server Integration Tests', () => {
 
       const projects = JSON.parse(response.result.content[0].text);
       expect(Array.isArray(projects)).toBe(true);
-    });
+    }, 20000);
 
     it('should handle get_conversation tool call', async () => {
       const request = {

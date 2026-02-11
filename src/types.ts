@@ -101,6 +101,7 @@ export interface TokenUsage {
 export interface CloudOrganization {
   uuid: string;
   name: string;
+  capabilities?: string[];
   [key: string]: unknown;
 }
 

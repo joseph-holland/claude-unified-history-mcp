@@ -46,13 +46,8 @@ Search all your Claude conversations in one place - terminal sessions from Claud
 ## Getting Your Session Key
 
 1. Go to [claude.ai](https://claude.ai) and log in
-2. Create a bookmarklet with this code:
-
-```javascript
-javascript:(()=>{const c=document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('sessionKey='));if(c){const k=c.split('=')[1];navigator.clipboard.writeText(k);alert('Session key copied to clipboard!')}else{alert('sessionKey not found. Make sure you are logged into claude.ai')}})()
-```
-
-3. Click the bookmarklet while on claude.ai
+2. Open DevTools (F12) → **Application** → **Storage** → **Cookies** → `https://claude.ai`
+3. Find the `sessionKey` row, double-click the value to select it, and copy
 4. Paste the key into your MCP config
 
 ## Environment Variables
@@ -194,7 +189,7 @@ The server never crashes on source failures. Partial results are returned with m
 
 **Cloud source not working?**
 - Check that `CLAUDE_SESSION_KEY` is set correctly
-- Session keys expire - get a fresh one from the bookmarklet
+- Session keys expire - grab a fresh one from the console command above
 - Check server stderr for auth warnings
 
 **No results from code source?**

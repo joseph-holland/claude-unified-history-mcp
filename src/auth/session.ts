@@ -35,9 +35,11 @@ export class CloudSession {
     try {
       const orgs = await this.fetchApi<CloudOrganization[]>('/api/organizations');
       if (orgs && orgs.length > 0) {
-        const firstOrg = orgs[0];
-        if (firstOrg) {
-          this.orgId = firstOrg.uuid;
+        // Prefer an org with 'chat' capability (claude.ai conversations)
+        const chatOrg = orgs.find(o => o.capabilities?.includes('chat'));
+        const selectedOrg = chatOrg ?? orgs[0];
+        if (selectedOrg) {
+          this.orgId = selectedOrg.uuid;
           return this.orgId;
         }
       }
@@ -78,13 +80,26 @@ export class CloudSession {
           headers: {
             'Cookie': `sessionKey=${this.sessionKey}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://claude.ai/',
+            'Origin': 'https://claude.ai',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
           },
           signal: AbortSignal.timeout(10000),
         });
 
-        if (response.status === 401 || response.status === 403) {
-          console.warn('Session key expired or invalid (HTTP ' + response.status + ')');
+        if (response.status === 401) {
+          console.warn('Session key expired or invalid (HTTP 401)');
           this.markUnavailable();
+          return null;
+        }
+
+        if (response.status === 403) {
+          console.warn('Permission denied (HTTP 403) for: ' + path);
           return null;
         }
 
