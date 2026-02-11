@@ -1,6 +1,6 @@
 {
   "name": "claude-unified-history-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "MCP server for unified Claude conversation history - search across Claude Code terminal sessions and claude.ai web conversations",
   "type": "module",
   "main": "dist/index.js",

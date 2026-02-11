@@ -161,42 +161,54 @@ export class ClaudeApiSource implements ConversationSource {
     const normalizedStartDate = startDate ? normalizeDate(startDate, false, timezone) : undefined;
     const normalizedEndDate = endDate ? normalizeDate(endDate, true, timezone) : undefined;
 
+    // Filter by date before fetching details
+    const filtered = conversations.filter(conv => {
+      if (normalizedStartDate && conv.updated_at < normalizedStartDate) return false;
+      if (normalizedEndDate && conv.created_at > normalizedEndDate) return false;
+      return true;
+    });
+
+    // Fetch conversation details concurrently (pool of 5)
+    const CONCURRENCY = 5;
     const results: SearchResult[] = [];
     const queryLower = query.toLowerCase();
 
-    for (const conv of conversations) {
+    for (let i = 0; i < filtered.length; i += CONCURRENCY) {
       if (results.length >= limit) break;
 
-      // Date filtering
-      if (normalizedStartDate && conv.updated_at < normalizedStartDate) continue;
-      if (normalizedEndDate && conv.created_at > normalizedEndDate) continue;
-
-      // Fetch conversation detail to search messages
-      const detail = await this.session.fetchApi<CloudConversationDetail>(
-        `/api/organizations/${orgId}/chat_conversations/${conv.uuid}`,
+      const batch = filtered.slice(i, i + CONCURRENCY);
+      const details = await Promise.all(
+        batch.map(conv =>
+          this.session.fetchApi<CloudConversationDetail>(
+            `/api/organizations/${orgId}/chat_conversations/${conv.uuid}`,
+          ).then(detail => ({ conv, detail })),
+        ),
       );
 
-      if (!detail?.chat_messages) continue;
-
-      for (const msg of detail.chat_messages) {
+      for (const { conv, detail } of details) {
         if (results.length >= limit) break;
+        if (!detail?.chat_messages) continue;
 
-        const content = extractCloudContent(msg);
-        if (content.toLowerCase().includes(queryLower)) {
-          const idx = content.toLowerCase().indexOf(queryLower);
-          const snippetStart = Math.max(0, idx - 50);
-          const snippetEnd = Math.min(content.length, idx + query.length + 50);
-          const snippet = (snippetStart > 0 ? '...' : '') +
-            content.slice(snippetStart, snippetEnd) +
-            (snippetEnd < content.length ? '...' : '');
+        for (const msg of detail.chat_messages) {
+          if (results.length >= limit) break;
 
-          results.push({
-            source: { type: 'cloud' },
-            sessionId: conv.uuid,
-            messageId: msg.uuid,
-            snippet,
-            timestamp: new Date(msg.created_at),
-          });
+          const content = extractCloudContent(msg);
+          if (content.toLowerCase().includes(queryLower)) {
+            const idx = content.toLowerCase().indexOf(queryLower);
+            const snippetStart = Math.max(0, idx - 50);
+            const snippetEnd = Math.min(content.length, idx + query.length + 50);
+            const snippet = (snippetStart > 0 ? '...' : '') +
+              content.slice(snippetStart, snippetEnd) +
+              (snippetEnd < content.length ? '...' : '');
+
+            results.push({
+              source: { type: 'cloud' },
+              sessionId: conv.uuid,
+              messageId: msg.uuid,
+              snippet,
+              timestamp: new Date(msg.created_at),
+            });
+          }
         }
       }
     }

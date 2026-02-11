@@ -230,51 +230,66 @@ export class ClaudeCodeSource implements ConversationSource {
       const projectsDir = path.join(this.claudeDir, 'projects');
       const projectDirs = await fs.readdir(projectsDir);
 
+      // Collect all JSONL file paths to search
+      const filePaths: string[] = [];
       for (const projectDir of projectDirs) {
         const decodedPath = decodeProjectPath(projectDir);
-
-        if (projectPath && decodedPath !== projectPath) {
-          continue;
-        }
+        if (projectPath && decodedPath !== projectPath) continue;
 
         const projectDirPath = path.join(projectsDir, projectDir);
-        const stats = await fs.stat(projectDirPath);
-
+        let stats;
+        try { stats = await fs.stat(projectDirPath); } catch { continue; }
         if (!stats.isDirectory()) continue;
 
         const files = await fs.readdir(projectDirPath);
-
         for (const file of files) {
-          if (!file.endsWith('.jsonl')) continue;
-
-          const filePath = path.join(projectDirPath, file);
-
-          if (await shouldSkipFile(filePath, normalizedStartDate, normalizedEndDate)) {
-            continue;
+          if (file.endsWith('.jsonl')) {
+            filePaths.push(path.join(projectDirPath, file));
           }
+        }
+      }
 
-          const entries = await parseJsonlFile(filePath, normalizedStartDate, normalizedEndDate);
+      // Process files in parallel batches of 10
+      const FILE_CONCURRENCY = 10;
+      for (let i = 0; i < filePaths.length; i += FILE_CONCURRENCY) {
+        if (results.length >= limit) break;
 
-          for (const entry of entries) {
-            const content = extractContent(entry);
-            if (content.toLowerCase().includes(queryLower)) {
-              // Build snippet around match
-              const idx = content.toLowerCase().indexOf(queryLower);
-              const snippetStart = Math.max(0, idx - 50);
-              const snippetEnd = Math.min(content.length, idx + query.length + 50);
-              const snippet = (snippetStart > 0 ? '...' : '') +
-                content.slice(snippetStart, snippetEnd) +
-                (snippetEnd < content.length ? '...' : '');
-
-              results.push({
-                source: { type: 'code' },
-                sessionId: entry.sessionId,
-                messageId: entry.uuid,
-                snippet,
-                timestamp: new Date(entry.timestamp),
-              });
+        const batch = filePaths.slice(i, i + FILE_CONCURRENCY);
+        const batchResults = await Promise.all(
+          batch.map(async (filePath) => {
+            if (await shouldSkipFile(filePath, normalizedStartDate, normalizedEndDate)) {
+              return [];
             }
-          }
+
+            const entries = await parseJsonlFile(filePath, normalizedStartDate, normalizedEndDate);
+            const fileResults: SearchResult[] = [];
+
+            for (const entry of entries) {
+              const content = extractContent(entry);
+              if (content.toLowerCase().includes(queryLower)) {
+                const idx = content.toLowerCase().indexOf(queryLower);
+                const snippetStart = Math.max(0, idx - 50);
+                const snippetEnd = Math.min(content.length, idx + query.length + 50);
+                const snippet = (snippetStart > 0 ? '...' : '') +
+                  content.slice(snippetStart, snippetEnd) +
+                  (snippetEnd < content.length ? '...' : '');
+
+                fileResults.push({
+                  source: { type: 'code' },
+                  sessionId: entry.sessionId,
+                  messageId: entry.uuid,
+                  snippet,
+                  timestamp: new Date(entry.timestamp),
+                });
+              }
+            }
+
+            return fileResults;
+          }),
+        );
+
+        for (const fileResults of batchResults) {
+          results.push(...fileResults);
         }
       }
     } catch {

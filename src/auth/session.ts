@@ -2,12 +2,19 @@ import type { CloudOrganization } from '../types.js';
 
 const CLAUDE_API_BASE = 'https://claude.ai';
 const REQUEST_DELAY_MS = 100;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
 
 export class CloudSession {
   private sessionKey: string;
   private orgId: string | null = null;
   private available: boolean = true;
   private lastRequestTime: number = 0;
+  private cache = new Map<string, CacheEntry<unknown>>();
 
   constructor(sessionKey: string, orgId?: string) {
     this.sessionKey = sessionKey;
@@ -59,6 +66,15 @@ export class CloudSession {
   async fetchApi<T>(path: string): Promise<T | null> {
     if (!this.available) {
       return null;
+    }
+
+    // Check cache first
+    const cached = this.cache.get(path);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data as T;
+    }
+    if (cached) {
+      this.cache.delete(path);
     }
 
     // Rate limiting: ensure minimum delay between requests
@@ -115,7 +131,9 @@ export class CloudSession {
           return null;
         }
 
-        return await response.json() as T;
+        const data = await response.json() as T;
+        this.cache.set(path, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+        return data;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         if (lastError.name === 'TimeoutError' || lastError.name === 'AbortError') {
