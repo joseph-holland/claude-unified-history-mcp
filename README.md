@@ -14,7 +14,21 @@ Search all your Claude conversations in one place - terminal sessions from Claud
 
 ## Quick Start
 
-### Claude Code history only (no config needed)
+### Global install (recommended)
+
+Add to all Claude Code sessions using the CLI:
+
+```bash
+# Code history only
+claude mcp add --scope user claude-history -- npx claude-unified-history-mcp
+
+# With claude.ai conversations
+claude mcp add --scope user -e CLAUDE_SESSION_KEY=your-session-key-here claude-history -- npx claude-unified-history-mcp
+```
+
+### Project-level install
+
+Add a `.mcp.json` to your project root:
 
 ```json
 {
@@ -27,7 +41,7 @@ Search all your Claude conversations in one place - terminal sessions from Claud
 }
 ```
 
-### With claude.ai conversations
+With claude.ai conversations:
 
 ```json
 {
