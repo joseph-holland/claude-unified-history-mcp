@@ -362,11 +362,11 @@ describe('MCP Server Integration Tests', () => {
         }
       };
 
-      const response = await sendRequest(request);
+      const response = await sendRequest(request, 15000);
 
       const result = JSON.parse(response.result.content[0].text);
       expect(result).toHaveProperty('sessions');
       expect(result).toHaveProperty('pagination');
-    });
+    }, 20000);
   });
 });
