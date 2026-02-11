@@ -22,6 +22,7 @@ node_modules/
 
 # Local development files
 .env*
+.mcp.json
 .vscode/
 .idea/
 *.log
