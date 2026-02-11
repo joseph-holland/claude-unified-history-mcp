@@ -22,6 +22,13 @@ export default [
         module: 'readonly',
         require: 'readonly',
         exports: 'readonly',
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        URL: 'readonly',
       },
     },
     plugins: {
