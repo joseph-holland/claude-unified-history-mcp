@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { spawn, ChildProcess } from 'child_process';
+import { describe, it, expect } from '@jest/globals';
+import { spawn } from 'child_process';
 import * as path from 'path';
 
 describe('MCP Server Integration Tests', () => {
   const serverPath = path.join(__dirname, '..', '..', 'dist', 'index.js');
-  
+
   // Helper function to send requests to the server
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sendRequest = (request: any, timeout = 5000): Promise<any> => {
     return new Promise((resolve, reject) => {
       const server = spawn('node', [serverPath], {
@@ -13,22 +14,20 @@ describe('MCP Server Integration Tests', () => {
       });
 
       let output = '';
-      let errorOutput = '';
 
-      server.stdout?.on('data', (data) => {
+      server.stdout?.on('data', (data: Buffer) => {
         output += data.toString();
       });
 
-      server.stderr?.on('data', (data) => {
-        errorOutput += data.toString();
+      server.stderr?.on('data', (_data: Buffer) => {
+        // ignore stderr
       });
 
-      server.on('close', (code) => {
+      server.on('close', () => {
         try {
-          // Find the JSON response in the output
           const lines = output.trim().split('\n');
           const jsonLine = lines.find(line => line.startsWith('{'));
-          
+
           if (jsonLine) {
             const response = JSON.parse(jsonLine);
             resolve(response);
@@ -40,17 +39,15 @@ describe('MCP Server Integration Tests', () => {
         }
       });
 
-      server.on('error', (error) => {
+      server.on('error', (error: Error) => {
         reject(error);
       });
 
-      // Send request and close stdin
       if (server.stdin) {
         server.stdin.write(JSON.stringify(request) + '\n');
         server.stdin.end();
       }
 
-      // Set timeout
       setTimeout(() => {
         server.kill();
         reject(new Error('Request timeout'));
@@ -75,7 +72,7 @@ describe('MCP Server Integration Tests', () => {
         result: expect.objectContaining({
           tools: expect.arrayContaining([
             expect.objectContaining({
-              name: 'get_conversation_history'
+              name: 'get_conversation'
             }),
             expect.objectContaining({
               name: 'search_conversations'
@@ -89,6 +86,27 @@ describe('MCP Server Integration Tests', () => {
           ])
         })
       });
+    });
+
+    it('should have source parameter on list_projects', async () => {
+      const request = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {}
+      };
+
+      const response = await sendRequest(request);
+      const listProjectsTool = response.result.tools.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (t: any) => t.name === 'list_projects'
+      );
+
+      expect(listProjectsTool).toBeDefined();
+      expect(listProjectsTool.inputSchema.properties.source).toBeDefined();
+      expect(listProjectsTool.inputSchema.properties.source.enum).toContain('code');
+      expect(listProjectsTool.inputSchema.properties.source.enum).toContain('cloud');
+      expect(listProjectsTool.inputSchema.properties.source.enum).toContain('all');
     });
 
     it('should handle list_projects tool call', async () => {
@@ -117,20 +135,19 @@ describe('MCP Server Integration Tests', () => {
         })
       });
 
-      // Verify the response contains valid JSON
       const projects = JSON.parse(response.result.content[0].text);
       expect(Array.isArray(projects)).toBe(true);
     });
 
-    it('should handle get_conversation_history tool call', async () => {
+    it('should handle get_conversation tool call', async () => {
       const request = {
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
         params: {
-          name: 'get_conversation_history',
+          name: 'get_conversation',
           arguments: {
-            limit: 5
+            sessionId: 'non-existent-session-id'
           }
         }
       };
@@ -150,10 +167,8 @@ describe('MCP Server Integration Tests', () => {
         })
       });
 
-      const history = JSON.parse(response.result.content[0].text);
-      expect(history).toHaveProperty('entries');
-      expect(history).toHaveProperty('pagination');
-      expect(Array.isArray(history.entries)).toBe(true);
+      const result = JSON.parse(response.result.content[0].text);
+      expect(result).toHaveProperty('error');
     });
   });
 
@@ -165,7 +180,7 @@ describe('MCP Server Integration Tests', () => {
         method: 'tools/call',
         params: {
           name: 'search_conversations',
-          arguments: {} // Missing required 'query' parameter
+          arguments: {}
         }
       };
 
@@ -243,8 +258,10 @@ describe('MCP Server Integration Tests', () => {
         })
       });
 
-      const results = JSON.parse(response.result.content[0].text);
-      expect(Array.isArray(results)).toBe(true);
+      const result = JSON.parse(response.result.content[0].text);
+      expect(result).toHaveProperty('results');
+      expect(result).toHaveProperty('sources_searched');
+      expect(Array.isArray(result.results)).toBe(true);
     });
 
     it('should handle list_sessions tool call', async () => {
@@ -273,23 +290,51 @@ describe('MCP Server Integration Tests', () => {
         })
       });
 
-      const sessions = JSON.parse(response.result.content[0].text);
-      expect(Array.isArray(sessions)).toBe(true);
+      const result = JSON.parse(response.result.content[0].text);
+      expect(result).toHaveProperty('sessions');
+      expect(result).toHaveProperty('pagination');
+      expect(Array.isArray(result.sessions)).toBe(true);
     });
-  });
 
-  describe('Data Filtering and Parameters', () => {
-    it('should handle get_conversation_history with date filters', async () => {
+    it('should return error for get_conversation without sessionId', async () => {
       const request = {
         jsonrpc: '2.0',
         id: 8,
         method: 'tools/call',
         params: {
-          name: 'get_conversation_history',
+          name: 'get_conversation',
+          arguments: {}
+        }
+      };
+
+      const response = await sendRequest(request);
+
+      expect(response).toMatchObject({
+        jsonrpc: '2.0',
+        id: 8,
+        result: expect.objectContaining({
+          isError: true,
+          content: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'text',
+              text: 'Error: sessionId is required'
+            })
+          ])
+        })
+      });
+    });
+  });
+
+  describe('Source Filtering', () => {
+    it('should accept source filter on list_projects', async () => {
+      const request = {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: {
+          name: 'list_projects',
           arguments: {
-            startDate: '2025-06-30T00:00:00.000Z',
-            endDate: '2025-06-30T23:59:59.999Z',
-            limit: 10
+            source: 'code'
           }
         }
       };
@@ -297,36 +342,30 @@ describe('MCP Server Integration Tests', () => {
       const response = await sendRequest(request);
 
       expect(response.jsonrpc).toBe('2.0');
-      expect(response.id).toBe(8);
       expect(response.result).toBeDefined();
 
-      const history = JSON.parse(response.result.content[0].text);
-      expect(history).toHaveProperty('entries');
-      expect(history).toHaveProperty('pagination');
-      expect(Array.isArray(history.entries)).toBe(true);
+      const projects = JSON.parse(response.result.content[0].text);
+      expect(Array.isArray(projects)).toBe(true);
     });
 
-    it('should handle list_sessions with project filter', async () => {
+    it('should accept source filter on list_sessions', async () => {
       const request = {
         jsonrpc: '2.0',
-        id: 9,
+        id: 11,
         method: 'tools/call',
         params: {
           name: 'list_sessions',
           arguments: {
-            projectPath: 'Users/test/project'
+            source: 'code'
           }
         }
       };
 
       const response = await sendRequest(request);
 
-      expect(response.jsonrpc).toBe('2.0');
-      expect(response.id).toBe(9);
-      expect(response.result).toBeDefined();
-
-      const sessions = JSON.parse(response.result.content[0].text);
-      expect(Array.isArray(sessions)).toBe(true);
+      const result = JSON.parse(response.result.content[0].text);
+      expect(result).toHaveProperty('sessions');
+      expect(result).toHaveProperty('pagination');
     });
   });
 });

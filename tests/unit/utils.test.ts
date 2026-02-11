@@ -28,7 +28,7 @@ describe('Utility Functions', () => {
       );
       
       expect(filtered).toHaveLength(1);
-      expect(filtered[0].content).toBe('entry2');
+      expect(filtered[0]!.content).toBe('entry2');
     });
   });
 
@@ -44,9 +44,9 @@ describe('Utility Functions', () => {
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       
-      expect(sorted[0].id).toBe('entry3');
-      expect(sorted[1].id).toBe('entry2');
-      expect(sorted[2].id).toBe('entry1');
+      expect(sorted[0]!.id).toBe('entry3');
+      expect(sorted[1]!.id).toBe('entry2');
+      expect(sorted[2]!.id).toBe('entry1');
     });
   });
 

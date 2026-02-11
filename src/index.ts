@@ -2,144 +2,186 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { 
-  CallToolRequestSchema, 
+import {
+  CallToolRequestSchema,
   ListToolsRequestSchema,
-  Tool
+  type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ClaudeCodeHistoryService } from './services/history-service.js';
+import type { ConversationSource } from './sources/index.js';
+import { ClaudeCodeSource } from './sources/claude-code.js';
+import { ClaudeApiSource } from './sources/claude-api.js';
+import { createCloudSession } from './auth/session.js';
+import { listProjects } from './tools/list-projects.js';
+import { listSessions } from './tools/list-sessions.js';
+import { getConversation } from './tools/get-conversation.js';
+import { searchConversations } from './tools/search.js';
+import type { SourceType } from './types.js';
 
 const server = new Server(
   {
-    name: 'claude-code-history-mcp',
-    version: '1.1.0',
+    name: 'claude-unified-history-mcp',
+    version: '2.0.0',
   },
   {
     capabilities: {
       tools: {},
     },
-  }
+  },
 );
 
-const historyService = new ClaudeCodeHistoryService();
+// Initialize sources
+const sources: ConversationSource[] = [new ClaudeCodeSource()];
 
-// Helper function to create response
-const createResponse = (data: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+const cloudSession = createCloudSession();
+if (cloudSession) {
+  sources.push(new ClaudeApiSource(cloudSession));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const createResponse = (data: any) => ({
   content: [{
-    type: 'text',
+    type: 'text' as const,
     text: JSON.stringify(data),
   }],
 });
 
-// Define available tools (ordered by recommended workflow)
+const sourceEnum = ['code', 'cloud', 'all'] as const;
+
 const tools: Tool[] = [
   {
     name: 'list_projects',
-    description: 'List all projects with Claude Code conversation history (start here to explore available data)',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: 'list_sessions',
-    description: 'List conversation sessions for a project or date range (use after list_projects to find specific sessions)',
+    description: 'List all projects with Claude conversation history from both Claude Code terminal sessions and claude.ai synced conversations.',
     inputSchema: {
       type: 'object',
       properties: {
-        projectPath: {
+        source: {
           type: 'string',
-          description: 'Filter by specific project path (optional)',
-        },
-        startDate: {
-          type: 'string',
-          description: 'Start date in ISO format (optional)',
-        },
-        endDate: {
-          type: 'string',
-          description: 'End date in ISO format (optional)',
-        },
-        timezone: {
-          type: 'string',
-          description: 'Timezone for date filtering (e.g., "Asia/Tokyo", "UTC"). Defaults to system timezone.',
+          enum: [...sourceEnum],
+          description: "Filter by source: 'code' (terminal), 'cloud' (claude.ai/mobile/desktop), or 'all' (default: 'all')",
         },
       },
     },
   },
   {
-    name: 'get_conversation_history',
-    description: 'Get paginated conversation history (use after exploring with list_projects/list_sessions for targeted data)',
+    name: 'list_sessions',
+    description: 'List conversation sessions with filtering. Supports both Claude Code terminal sessions and claude.ai synced conversations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          enum: [...sourceEnum],
+          description: "Filter by source (default: 'all')",
+        },
+        projectPath: {
+          type: 'string',
+          description: 'Filter by project path (code source)',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Filter by project ID (cloud source)',
+        },
+        startDate: {
+          type: 'string',
+          description: 'Start date in ISO format or YYYY-MM-DD',
+        },
+        endDate: {
+          type: 'string',
+          description: 'End date in ISO format or YYYY-MM-DD',
+        },
+        timezone: {
+          type: 'string',
+          description: 'IANA timezone (e.g., "America/New_York", "UTC"). Defaults to system timezone.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default: 50)',
+          default: 50,
+        },
+        offset: {
+          type: 'number',
+          description: 'Pagination offset',
+          default: 0,
+        },
+      },
+    },
+  },
+  {
+    name: 'get_conversation',
+    description: 'Retrieve full conversation by session ID. Auto-detects source if not specified (tries local first, then cloud).',
     inputSchema: {
       type: 'object',
       properties: {
         sessionId: {
           type: 'string',
-          description: 'Specific session ID to get history for (optional)',
+          description: 'Session/conversation ID',
         },
-        startDate: {
+        source: {
           type: 'string',
-          description: 'Start date in ISO format (optional)',
-        },
-        endDate: {
-          type: 'string',
-          description: 'End date in ISO format (optional)',
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of conversations to return (default: 20)',
-          default: 20,
-        },
-        offset: {
-          type: 'number',
-          description: 'Number of conversations to skip for pagination (default: 0)',
-          default: 0,
+          enum: ['code', 'cloud'],
+          description: 'Hint for source routing (auto-detect if omitted)',
         },
         messageTypes: {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['user', 'assistant', 'system', 'result']
+            enum: ['user', 'assistant', 'system'],
           },
-          description: 'Filter by specific message types. Defaults to ["user"] to reduce data volume. Use ["user", "assistant"] to include Claude responses.',
-          default: ['user']
+          description: "Filter by message types (default: ['user', 'assistant'])",
         },
-        timezone: {
-          type: 'string',
-          description: 'Timezone for date filtering (e.g., "Asia/Tokyo", "UTC"). Defaults to system timezone.',
+        limit: {
+          type: 'number',
+          description: 'Max messages (default: 100)',
+          default: 100,
+        },
+        offset: {
+          type: 'number',
+          description: 'Pagination offset',
+          default: 0,
         },
       },
+      required: ['sessionId'],
     },
   },
   {
     name: 'search_conversations',
-    description: 'Search through conversation history by content (useful for finding specific topics across all conversations)',
+    description: 'Search across all conversation content from both Claude Code terminal sessions and claude.ai synced conversations. Results are merged by timestamp.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Search query to find in conversation content',
+          description: 'Search terms',
         },
-        limit: {
-          type: 'number', 
-          description: 'Maximum number of results to return (default: 30)',
-          default: 30,
+        source: {
+          type: 'string',
+          enum: [...sourceEnum],
+          description: "Filter by source (default: 'all')",
         },
         projectPath: {
           type: 'string',
-          description: 'Filter by specific project path (optional)',
+          description: 'Filter by project path (code source)',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Filter by project ID (cloud source)',
         },
         startDate: {
           type: 'string',
-          description: 'Start date in ISO format (optional)',
+          description: 'Start date in ISO format or YYYY-MM-DD',
         },
         endDate: {
           type: 'string',
-          description: 'End date in ISO format (optional)',
+          description: 'End date in ISO format or YYYY-MM-DD',
         },
         timezone: {
           type: 'string',
-          description: 'Timezone for date filtering (e.g., "Asia/Tokyo", "UTC"). Defaults to system timezone.',
+          description: 'IANA timezone (e.g., "America/New_York", "UTC"). Defaults to system timezone.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default: 30)',
+          default: 30,
         },
       },
       required: ['query'],
@@ -158,17 +200,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case 'get_conversation_history': {
-        const history = await historyService.getConversationHistory({
-          sessionId: args?.sessionId as string,
-          startDate: args?.startDate as string,
-          endDate: args?.endDate as string,
-          limit: (args?.limit as number) || 20,
-          offset: (args?.offset as number) || 0,
-          messageTypes: args?.messageTypes as ('user' | 'assistant' | 'system' | 'result')[],
-          timezone: args?.timezone as string,
+      case 'list_projects': {
+        const result = await listProjects(sources, {
+          source: (args?.source as SourceType | 'all') ?? 'all',
         });
-        return createResponse(history);
+        return createResponse(result);
+      }
+
+      case 'list_sessions': {
+        const result = await listSessions(sources, {
+          source: (args?.source as SourceType | 'all') ?? 'all',
+          projectPath: args?.projectPath as string | undefined,
+          projectId: args?.projectId as string | undefined,
+          startDate: args?.startDate as string | undefined,
+          endDate: args?.endDate as string | undefined,
+          timezone: args?.timezone as string | undefined,
+          limit: (args?.limit as number | undefined) ?? 50,
+          offset: (args?.offset as number | undefined) ?? 0,
+        });
+        return createResponse(result);
+      }
+
+      case 'get_conversation': {
+        const sessionId = args?.sessionId as string;
+        if (!sessionId) {
+          throw new Error('sessionId is required');
+        }
+        const result = await getConversation(sources, {
+          sessionId,
+          source: args?.source as SourceType | undefined,
+          messageTypes: args?.messageTypes as string[] | undefined,
+          limit: (args?.limit as number | undefined) ?? 100,
+          offset: (args?.offset as number | undefined) ?? 0,
+        });
+        if (!result) {
+          return createResponse({ error: 'Conversation not found', sessionId });
+        }
+        return createResponse(result);
       }
 
       case 'search_conversations': {
@@ -176,33 +244,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!query) {
           throw new Error('Search query is required');
         }
-        
-        const results = await historyService.searchConversations(
+        const result = await searchConversations(sources, {
           query,
-          {
-            limit: (args?.limit as number) || 30,
-            projectPath: args?.projectPath as string,
-            startDate: args?.startDate as string,
-            endDate: args?.endDate as string,
-            timezone: args?.timezone as string,
-          }
-        );
-        return createResponse(results);
-      }
-
-      case 'list_projects': {
-        const projects = await historyService.listProjects();
-        return createResponse(projects);
-      }
-
-      case 'list_sessions': {
-        const sessions = await historyService.listSessions({
-          projectPath: args?.projectPath as string,
-          startDate: args?.startDate as string,
-          endDate: args?.endDate as string,
-          timezone: args?.timezone as string,
+          source: (args?.source as SourceType | 'all') ?? 'all',
+          projectPath: args?.projectPath as string | undefined,
+          projectId: args?.projectId as string | undefined,
+          startDate: args?.startDate as string | undefined,
+          endDate: args?.endDate as string | undefined,
+          timezone: args?.timezone as string | undefined,
+          limit: (args?.limit as number | undefined) ?? 30,
         });
-        return createResponse(sessions);
+        return createResponse(result);
       }
 
       default:
@@ -212,7 +264,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
       content: [{
-        type: 'text',
+        type: 'text' as const,
         text: `Error: ${errorMessage}`,
       }],
       isError: true,
@@ -224,7 +276,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('Claude Code History MCP Server started');
+  console.error('Claude Unified History MCP Server started');
+
+  const cloudEnabled = sources.some(s => s.type === 'cloud');
+  console.error(`Sources: code${cloudEnabled ? ', cloud' : ''}`);
 }
 
 main().catch((error) => {

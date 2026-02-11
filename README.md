@@ -1,207 +1,215 @@
-# Claude Code History MCP Server
+# Claude Unified History MCP
 
-An MCP server for retrieving and analyzing Claude Code conversation history with smart filtering and pagination.
+Search all your Claude conversations in one place - terminal sessions from Claude Code and synced conversations from claude.ai (web, mobile, and desktop apps).
+
+> Fork of [yudppp/claude-code-history-mcp](https://github.com/yudppp/claude-code-history-mcp). Original work by [@yudppp](https://github.com/yudppp).
 
 ## Features
 
-This MCP server provides **4 powerful tools** for exploring your Claude Code conversation history:
-
-### 1. `list_projects` 👀 **Start Here**
-Discover all projects with Claude Code conversation history.
-
-**Why use this first:** Get an overview of all available data before diving deeper.
-
-**Returns:** Project paths, session counts, message counts, and last activity time.
-
-### 2. `list_sessions` 📁 **Explore Sessions** 
-List conversation sessions for exploration and filtering.
-
-**Parameters:**
-- `projectPath` (optional): Filter by specific project
-- `startDate` (optional): Start date (e.g., "2025-06-30")
-- `endDate` (optional): End date (e.g., "2025-06-30")
-- `timezone` (optional): Timezone for date filtering (e.g., "Asia/Tokyo", "UTC")
-
-**Returns:** Session IDs, timestamps, message counts, and project paths.
-
-### 3. `get_conversation_history` 💬 **Get Detailed Data**
-Retrieve paginated conversation history with smart filtering.
-
-**Key Features:**
-- **Pagination**: `limit` (default: 20) and `offset` for efficient data handling
-- **Message Filtering**: `messageTypes` defaults to `["user"]` to reduce data volume
-- **Timezone Support**: Automatic timezone detection or specify (e.g., "Asia/Tokyo")
-- **Date Filtering**: Smart date normalization with timezone awareness
-
-**Parameters:**
-- `sessionId` (optional): Specific session ID
-- `startDate` (optional): Start date (e.g., "2025-06-30")
-- `endDate` (optional): End date (e.g., "2025-06-30")
-- `limit` (optional): Max entries per page (default: 20)
-- `offset` (optional): Skip entries for pagination (default: 0)
-- `messageTypes` (optional): `["user"]` (default), `["user", "assistant"]`, etc.
-- `timezone` (optional): e.g., "Asia/Tokyo", "UTC" (auto-detected)
-
-**Example:**
-```json
-{
-  "startDate": "2025-06-30",
-  "limit": 50,
-  "messageTypes": ["user"],
-  "timezone": "Asia/Tokyo"
-}
-```
-
-**Response includes pagination info:**
-```json
-{
-  "entries": [...],
-  "pagination": {
-    "total_count": 150,
-    "limit": 20,
-    "offset": 0,
-    "has_more": true
-  }
-}
-```
-
-### 4. `search_conversations` 🔍 **Find Specific Content**
-Search across all conversation content by keywords with advanced filtering.
-
-**Parameters:**
-- `query` (required): Search terms
-- `limit` (optional): Max results (default: 30)
-- `projectPath` (optional): Filter by specific project path
-- `startDate` (optional): Start date (e.g., "2025-06-30")
-- `endDate` (optional): End date (e.g., "2025-06-30")
-- `timezone` (optional): Timezone for date filtering (e.g., "Asia/Tokyo", "UTC")
+- **Unified search** across Claude Code terminal sessions AND claude.ai conversations
+- **Source tagging** - every result tagged with `code` or `cloud` so you know where it came from
+- **Graceful degradation** - works with just Claude Code history, adding cloud is optional
+- **Timezone-aware** date filtering with automatic system timezone detection
+- **Pagination** for efficient handling of large conversation histories
 
 ## Quick Start
 
-```bash
-# Install directly via npx (no local installation needed)
-npx claude-code-history-mcp
-
-# Or install globally
-npm install -g claude-code-history-mcp
-```
-
-## Usage with MCP Clients
-
-Add the following configuration to your MCP client (e.g., Claude Desktop):
+### Claude Code history only (no config needed)
 
 ```json
 {
   "mcpServers": {
-    "claude-code-history": {
+    "claude-history": {
       "command": "npx",
-      "args": ["claude-code-history-mcp"]
+      "args": ["claude-unified-history-mcp"]
     }
   }
 }
 ```
 
-Alternatively, if you have installed the package globally:
+### With claude.ai conversations
 
 ```json
 {
   "mcpServers": {
-    "claude-code-history": {
-      "command": "claude-code-history-mcp"
+    "claude-history": {
+      "command": "npx",
+      "args": ["claude-unified-history-mcp"],
+      "env": {
+        "CLAUDE_SESSION_KEY": "your-session-key-here"
+      }
     }
   }
 }
 ```
 
-## Recommended Workflow 🚀
+## Getting Your Session Key
 
-### 1. **Explore Available Data**
-```json
-// Start with list_projects to see what's available
-{"tool": "list_projects"}
+1. Go to [claude.ai](https://claude.ai) and log in
+2. Create a bookmarklet with this code:
+
+```javascript
+javascript:(()=>{const c=document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('sessionKey='));if(c){const k=c.split('=')[1];navigator.clipboard.writeText(k);alert('Session key copied to clipboard!')}else{alert('sessionKey not found. Make sure you are logged into claude.ai')}})()
 ```
 
-### 2. **Find Relevant Sessions**
+3. Click the bookmarklet while on claude.ai
+4. Paste the key into your MCP config
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `CLAUDE_SESSION_KEY` | No | Session key from claude.ai cookies |
+| `CLAUDE_ORG_ID` | No | Auto-discovered if not provided |
+| `CLAUDE_WEB_ENABLED` | No | Set to `false` to disable cloud source even with key present |
+
+## Tools
+
+### `list_projects`
+
+List all projects with conversation history from both sources.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `code \| cloud \| all` | `all` | Filter by source |
+
+### `list_sessions`
+
+List conversation sessions with filtering and pagination.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source` | `code \| cloud \| all` | `all` | Filter by source |
+| `projectPath` | `string` | - | Filter by project (code) |
+| `projectId` | `string` | - | Filter by project (cloud) |
+| `startDate` | `string` | - | ISO date or YYYY-MM-DD |
+| `endDate` | `string` | - | ISO date or YYYY-MM-DD |
+| `timezone` | `string` | system | IANA timezone |
+| `limit` | `number` | `50` | Max results |
+| `offset` | `number` | `0` | Pagination offset |
+
+### `get_conversation`
+
+Retrieve full conversation by ID. Auto-detects source (tries local first, then cloud).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `sessionId` | `string` | **required** | Session/conversation ID |
+| `source` | `code \| cloud` | auto | Hint for routing |
+| `messageTypes` | `string[]` | `["user", "assistant"]` | Filter messages |
+| `limit` | `number` | `100` | Max messages |
+| `offset` | `number` | `0` | Pagination offset |
+
+### `search_conversations`
+
+Search across all conversation content. Results merged by timestamp, tagged with source.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | `string` | **required** | Search terms |
+| `source` | `code \| cloud \| all` | `all` | Filter by source |
+| `projectPath` | `string` | - | Filter by project (code) |
+| `projectId` | `string` | - | Filter by project (cloud) |
+| `startDate` | `string` | - | ISO date or YYYY-MM-DD |
+| `endDate` | `string` | - | ISO date or YYYY-MM-DD |
+| `timezone` | `string` | system | IANA timezone |
+| `limit` | `number` | `30` | Max results |
+
+**Response format:**
 ```json
-// List sessions for a specific project or date range with timezone
 {
-  "tool": "list_sessions",
-  "projectPath": "/Users/yourname/code/my-project",
-  "startDate": "2025-06-30",
-  "timezone": "Asia/Tokyo"
+  "results": [
+    {
+      "source": { "type": "code" },
+      "sessionId": "abc-123",
+      "messageId": "msg-456",
+      "snippet": "...context around match...",
+      "timestamp": "2025-06-30T10:00:00.000Z"
+    }
+  ],
+  "sources_searched": [
+    { "type": "code" },
+    { "type": "cloud" }
+  ]
 }
 ```
 
-### 3. **Get Targeted Data**
-```json
-// Get conversation history with optimal settings
-{
-  "tool": "get_conversation_history", 
-  "sessionId": "specific-session-id",
-  "messageTypes": ["user"],  // Only your inputs (default)
-  "limit": 50
-}
+## Example Workflows
+
+### Daily work review
+
+```
+1. list_projects → see active projects
+2. list_sessions with today's date → find today's sessions
+3. get_conversation for specific session → read the details
 ```
 
-## Data Source
+### Cross-platform search
 
-This server reads Claude Code history files (.jsonl format) stored in `~/.claude/projects/`.
-
-## Smart Features 💡
-
-### **Message Type Filtering**
-- **Default**: Only `["user"]` messages to reduce data volume
-- **Full conversation**: Use `["user", "assistant"]` 
-- **Everything**: Use `["user", "assistant", "system", "result"]`
-
-### **Timezone Intelligence**
-- Automatically detects your system timezone
-- Supports explicit timezone specification (e.g., "Asia/Tokyo")
-- Smart date normalization (e.g., "2025-06-30" → proper timezone bounds)
-
-### **Pagination Support**
-- Efficient handling of large datasets
-- `total_count` helps you understand data volume
-- `has_more` indicates if there's additional data
-
-## Use Cases
-
-### **Daily Work Review**
 ```
-What did I work on today?
+1. search_conversations with query "API design" → find everywhere you discussed it
+2. Results tagged with source (code/cloud) → know if it was a terminal session or web chat
+3. get_conversation for the relevant session → full context
 ```
-1. `list_projects` → See active projects
-2. `get_conversation_history` with today's date and `messageTypes: ["user"]`
 
-### **Project Deep Dive**
-```
-Analyze my recent work on Project X
-```
-1. `list_sessions` with specific project path
-2. `get_conversation_history` for relevant sessions
-3. Use pagination to browse through all data
+## Architecture
 
-### **Topic Research**
 ```
-Find all conversations about "API integration" in a specific project
+src/
+├── index.ts                    # MCP server entry, tool registration
+├── types.ts                    # Shared interfaces
+├── sources/
+│   ├── index.ts                # Source interface
+│   ├── claude-code.ts          # Local ~/.claude/projects/*.jsonl
+│   └── claude-api.ts           # claude.ai API client
+├── tools/
+│   ├── list-projects.ts        # Both sources
+│   ├── list-sessions.ts        # Both sources, tagged
+│   ├── get-conversation.ts     # Route by source
+│   └── search.ts               # Unified search, merged results
+├── auth/
+│   └── session.ts              # Session key handling, org discovery
+└── utils/
+    └── date.ts                 # Timezone utilities
 ```
-1. `search_conversations` with query "API integration", projectPath, and date range
-2. Use results to identify relevant sessions
-3. `get_conversation_history` for detailed context
 
-**Example with advanced filtering:**
-```json
-{
-  "tool": "search_conversations",
-  "query": "API integration",
-  "projectPath": "/Users/yourname/code/my-project",
-  "startDate": "2025-06-01",
-  "endDate": "2025-06-30",
-  "timezone": "Asia/Tokyo",
-  "limit": 50
-}
-```
+## Data Sources
+
+- **code**: Reads `.jsonl` files from `~/.claude/projects/` (Claude Code terminal sessions)
+- **cloud**: Calls claude.ai API endpoints (web, mobile, desktop app conversations)
+
+## Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| No session key | Cloud source disabled, code-only results |
+| Invalid/expired session key | Warning logged, cloud disabled for session |
+| API rate limit (429) | Exponential backoff, retry 3x |
+| Network timeout | 10s timeout, graceful fallback |
+| Missing ~/.claude directory | Empty results for code source |
+
+The server never crashes on source failures. Partial results are returned with metadata indicating which sources were searched.
+
+## Troubleshooting
+
+**Cloud source not working?**
+- Check that `CLAUDE_SESSION_KEY` is set correctly
+- Session keys expire - get a fresh one from the bookmarklet
+- Check server stderr for auth warnings
+
+**No results from code source?**
+- Verify `~/.claude/projects/` exists and contains `.jsonl` files
+- Claude Code creates these automatically during terminal sessions
+
+**Slow queries?**
+- Use date filtering to narrow the search window
+- Use `source: 'code'` or `source: 'cloud'` to search only one source
+- Reduce `limit` for faster responses
 
 ## License
 
 MIT
+
+## Attribution
+
+This project is a fork of [yudppp/claude-code-history-mcp](https://github.com/yudppp/claude-code-history-mcp). Original work by [@yudppp](https://github.com/yudppp).

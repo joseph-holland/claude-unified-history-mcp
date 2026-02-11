@@ -1,11 +1,13 @@
-export const mockClaudeMessage = {
+import type { ClaudeCodeMessage, Project, Session, SearchResult } from '../../src/types';
+
+export const mockClaudeMessage: ClaudeCodeMessage = {
   parentUuid: null,
   isSidechain: false,
   userType: "external",
   cwd: "/Users/test/project",
   sessionId: "test-session-123",
   version: "1.0.33",
-  type: "user" as const,
+  type: "user",
   message: {
     role: "user",
     content: "Fix the bug in the authentication module"
@@ -15,33 +17,26 @@ export const mockClaudeMessage = {
   requestId: "req-123"
 };
 
-export const mockAssistantMessage = {
+export const mockAssistantMessage: ClaudeCodeMessage = {
   parentUuid: "msg-uuid-123",
   isSidechain: false,
   userType: "external",
   cwd: "/Users/test/project",
   sessionId: "test-session-123",
   version: "1.0.33",
-  type: "assistant" as const,
+  type: "assistant",
   message: {
-    id: "msg_assistant_123",
-    type: "message",
     role: "assistant",
-    model: "claude-sonnet-4-20250514",
     content: [
       {
         type: "text",
         text: "I'll help you fix the authentication bug. Let me first examine the code."
       }
     ],
-    stop_reason: null,
-    stop_sequence: null,
+    model: "claude-sonnet-4-20250514",
     usage: {
       input_tokens: 10,
-      cache_creation_input_tokens: 0,
-      cache_read_input_tokens: 0,
       output_tokens: 20,
-      service_tier: "standard"
     }
   },
   uuid: "msg-uuid-456",
@@ -49,31 +44,32 @@ export const mockAssistantMessage = {
   requestId: "req-456"
 };
 
-export const mockConversationEntry = {
-  sessionId: "test-session-123",
-  timestamp: "2025-06-30T10:00:00.000Z",
-  type: "user" as const,
-  content: "Fix the bug in the authentication module",
-  projectPath: "Users/test/project",
-  uuid: "msg-uuid-123",
-  metadata: {}
-};
-
-export const mockProjectInfo = {
-  projectPath: "Users/test/project",
+export const mockProject: Project = {
+  id: "code_Users/test/project",
+  name: "Users/test/project",
+  path: "Users/test/project",
+  source: { type: 'code' },
   sessionCount: 5,
   messageCount: 150,
-  lastActivityTime: "2025-06-30T10:00:00.000Z"
+  lastActivity: new Date("2025-06-30T10:00:00.000Z"),
 };
 
-export const mockSessionInfo = {
-  sessionId: "test-session-123",
-  projectPath: "Users/test/project",
-  startTime: "2025-06-30T09:00:00.000Z",
-  endTime: "2025-06-30T10:00:00.000Z",
+export const mockSession: Session = {
+  id: "test-session-123",
+  source: { type: 'code' },
+  projectId: "code_Users/test/project",
+  projectName: "Users/test/project",
+  createdAt: new Date("2025-06-30T09:00:00.000Z"),
+  updatedAt: new Date("2025-06-30T10:00:00.000Z"),
   messageCount: 10,
-  userMessageCount: 5,
-  assistantMessageCount: 5
+};
+
+export const mockSearchResult: SearchResult = {
+  source: { type: 'code' },
+  sessionId: "test-session-123",
+  messageId: "msg-uuid-123",
+  snippet: "Fix the bug in the authentication module",
+  timestamp: new Date("2025-06-30T10:00:00.000Z"),
 };
 
 export const mockJsonlContent = `{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/Users/test/project","sessionId":"test-session-123","version":"1.0.33","type":"user","message":{"role":"user","content":"Fix the bug in the authentication module"},"uuid":"msg-uuid-123","timestamp":"2025-06-30T10:00:00.000Z"}

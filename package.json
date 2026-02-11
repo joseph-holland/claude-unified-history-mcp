@@ -1,12 +1,12 @@
 {
-  "name": "claude-code-history-mcp",
-  "version": "1.1.1",
-  "description": "MCP server for Claude Code conversation history tracking and analysis",
+  "name": "claude-unified-history-mcp",
+  "version": "2.0.0",
+  "description": "MCP server for unified Claude conversation history - search across Claude Code terminal sessions and claude.ai web conversations",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "claude-code-history-mcp": "dist/index.js"
+    "claude-unified-history-mcp": "dist/index.js"
   },
   "files": [
     "dist/",
@@ -40,23 +40,25 @@
     "typescript": "^5.8.3"
   },
   "keywords": [
-    "claude-code",
+    "claude",
     "mcp",
     "history",
     "conversation",
+    "anthropic",
+    "claude-code",
     "ai",
     "typescript",
     "server"
   ],
-  "author": "yudppp",
+  "author": "joseph-holland",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yudppp/claude-code-history-mcp.git"
+    "url": "https://github.com/joseph-holland/claude-unified-history-mcp.git"
   },
-  "homepage": "https://github.com/yudppp/claude-code-history-mcp#readme",
+  "homepage": "https://github.com/joseph-holland/claude-unified-history-mcp#readme",
   "bugs": {
-    "url": "https://github.com/yudppp/claude-code-history-mcp/issues"
+    "url": "https://github.com/joseph-holland/claude-unified-history-mcp/issues"
   },
   "engines": {
     "node": ">=18.0.0"
